@@ -21,40 +21,6 @@ function createFolder(dir: string) {
   }
 }
 
-async function go(url: string, path: string) {
-  const t = new Promise<any>((resolve, reject) => {
-    https.get(url, (res) => {
-      let result = "";
-      res.on("data", (data) => {
-        result += data;
-      });
-      res.on("error", (err) => {
-        reject(err);
-      });
-      res.on("end", () => {
-        resolve(JSON.parse(result));
-      });
-    });
-  });
-
-  const b = await Promise.resolve(t);
-
-  console.log(b);
-
-  // await new Promise((resolve, reject) => {
-  //   https.get(targetVideoFileUlr, (res) => {
-  //       const file = fs.createWriteStream(path);
-  //       res.pipe(file);
-  //       res.on('error', err => {
-  //           reject(err);
-  //       });
-  //       res.on('end', () => {
-  //           resolve();
-  //       });
-  //   });
-  // });
-}
-
 async function main() {
   const browser = await puppeteer.launch({
     timeout: 0,
@@ -84,10 +50,13 @@ async function main() {
 
   await delay(15000);
 
+  // Create root folder
+  createFolder("./courses");
+
   // Get group name
   const groupName = "WellOiledOperations";
 
-  createFolder(`./${groupName}`);
+  createFolder(`./courses/${groupName}`);
 
   const courseTitles = await fuzzy(page, "CourseTitle", (divs) =>
     divs.map((div) => div.textContent)
@@ -95,11 +64,18 @@ async function main() {
 
   console.log("course Titles: ", courseTitles);
 
-  for (const courseTitle of courseTitles) {
+  const currentUrl = page.url();
+
+  for (
+    let courseTitleIdx = 0;
+    courseTitleIdx < courseTitles.length;
+    courseTitleIdx++
+  ) {
+    const courseTitle = courseTitles[courseTitleIdx];
     await page.locator(`text/${courseTitle}`).click();
     await page.waitForNavigation();
 
-    createFolder(`./${groupName}/${courseTitle}`);
+    createFolder(`./courses/${groupName}/${courseTitleIdx} - ${courseTitle}`);
 
     // const expandableSections = await page.$$(
     //   `::-p-xpath(//div[contains(@class, 'Icon')])`
@@ -114,14 +90,21 @@ async function main() {
 
     let titleSet: Set<string> = new Set(lessonTitles);
 
-    for (const lessonTitle of titleSet) {
+    for (
+      let lessonTitleIdx = 0;
+      lessonTitleIdx < lessonTitles.length;
+      lessonTitleIdx++
+    ) {
+      const lessonTitle = lessonTitles[lessonTitleIdx];
       console.log("clicking section: ", lessonTitle);
       await page.locator(`::-p-xpath(//div[@title='${lessonTitle}'])`).click();
       await page.waitForNavigation().then(() => delay(1000));
 
-      createFolder(`./${groupName}/${courseTitle}/${lessonTitle}`);
+      createFolder(
+        `./courses/${groupName}/${courseTitleIdx} - ${courseTitle}/${lessonTitleIdx} - ${lessonTitle}`
+      );
 
-      // Download video
+      // Get video url
       await page
         .locator(`::-p-xpath(//div[contains(@class, 'VideoWrapper')])`)
         .click();
@@ -132,62 +115,21 @@ async function main() {
         )
         .waitHandle();
 
-      // const player = new Player(await video);
-
-      // console.log("REACHED!");
-
-      // page.evaluate(() => {
-      //   const a = document.createElement("a");
-      //   a.href = videoUrl;
-      //   a.download = "myfilename";
-      //   document.body.appendChild(a);
-      //   a.click();
-      //   document.body.removeChild(a);
-      // });
-
-      // page.evaluate(() => {
-      //   document.querySelector("");
-      // });
-
-      const videoUrl = await video.evaluate((v) => v.getAttribute("src"));
-
-      console.log("Downloading video: ", videoUrl);
-      // new DownloaderHelper(
-      //   videoUrl,
-      //   `./${groupName}/${courseTitle}/${lessonTitle}`,
-      //   { fileName: "video" }
-      // )
-      //   .start()
-      //   .catch((err) => console.error(err));
-
-      createFolder("./WellOiledOperations");
-      const val = await go(
-        videoUrl,
-        `./${groupName}/${courseTitle}/${lessonTitle}`
-      );
-
-      await page.evaluate(() => {
-        const downloadLink = document.createElement("a");
-        // const url = URL.createObjectURL(
-        //   new Blob(
-        //     [
-        //       // "https://player.vimeo.com/video/953223263?title=0&byline=0&portrait=0&autoplay=1&autopause=0&app_id=122963",
-        //       videoUrl,
-        //     ],
-        //     { type: "text/plain" }
-        //   )
-        // );
-
-        downloadLink.href = videoUrl; // Replace videoSrc with the actual video URL
-        downloadLink.download = "video.mp4"; // Replace with desired filename
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
+      const videoUrl = await video.evaluate((v) => {
+        return v.getAttribute("src");
       });
+
+      console.log("Gathering video url: ", videoUrl);
+
+      createFolder(
+        `./courses/${groupName}/${courseTitleIdx} - ${courseTitle}/`
+      );
 
       const resources = await page.$$(
         "::-p-xpath(//span[contains(@class, 'ResourceLabel')])"
       );
+
+      console.log(`Found ${resources.length} resources.`);
 
       for (const resourceLink of resources) {
         const resourceName = await resourceLink.evaluate((l) => l.textContent);
@@ -217,10 +159,10 @@ async function main() {
         await closeButton.click().then(() => delay(2000));
       }
 
-      await page.goBack();
+      // await page.goBack();
     }
 
-    await page.goBack();
+    await page.goto(currentUrl);
   }
 
   // click next page
