@@ -1,9 +1,33 @@
 import "dotenv/config";
 import puppeteer, { Page } from "puppeteer";
 import fs from "fs";
-import { DownloaderHelper } from "node-downloader-helper";
-import https from "https";
-import Player from "@vimeo/player";
+
+type SkoolPlatform = {
+  communities: Community[];
+};
+
+type Community = {
+  name: string;
+  courses: Course[];
+};
+
+type Course = {
+  name: string;
+  thumbnailUrl: string;
+  lessons: Lesson[];
+};
+
+type Lesson = {
+  name: string;
+  description: string;
+  videoUrl: string;
+  resources: Resource[];
+};
+
+type Resource = {
+  name: string;
+  url: string;
+};
 
 function fuzzy<T>(page: Page, text: string, func?: (item: HTMLElement[]) => T) {
   return page.$$eval(`::-p-xpath(//div[contains(@class, '${text}')])`, func);
@@ -15,11 +39,11 @@ function delay(time: number) {
   });
 }
 
-function createFolder(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
+// function createFolder(dir: string) {
+//   if (!fs.existsSync(dir)) {
+//     fs.mkdirSync(dir, { recursive: true });
+//   }
+// }
 
 async function main() {
   const browser = await puppeteer.launch({
@@ -42,21 +66,15 @@ async function main() {
   await page.locator("div ::-p-text(Classroom)").click();
   await page.waitForNavigation();
 
-  await delay(1000);
+  await delay(5000);
 
-  console.log("REACHED 1");
+  // Get community name
+  let group: Community = {
+    name: "WellOiledOperations",
+    courses: [],
+  };
 
-  // await page.click(`a[download="video.mp4"]`);
-
-  await delay(15000);
-
-  // Create root folder
-  createFolder("./courses");
-
-  // Get group name
-  const groupName = "WellOiledOperations";
-
-  createFolder(`./courses/${groupName}`);
+  // createFolder(`./courses/${groupName}`);
 
   const courseTitles = await fuzzy(page, "CourseTitle", (divs) =>
     divs.map((div) => div.textContent)
@@ -66,16 +84,11 @@ async function main() {
 
   const currentUrl = page.url();
 
-  for (
-    let courseTitleIdx = 0;
-    courseTitleIdx < courseTitles.length;
-    courseTitleIdx++
-  ) {
-    const courseTitle = courseTitles[courseTitleIdx];
+  for (const courseTitle of courseTitles) {
     await page.locator(`text/${courseTitle}`).click();
     await page.waitForNavigation();
 
-    createFolder(`./courses/${groupName}/${courseTitleIdx} - ${courseTitle}`);
+    // createFolder(`./courses/${groupName}/${courseTitleIdx} - ${courseTitle}`);
 
     // const expandableSections = await page.$$(
     //   `::-p-xpath(//div[contains(@class, 'Icon')])`
@@ -86,23 +99,26 @@ async function main() {
       divs.map((div) => div.textContent)
     );
 
+    // const lessonThumbnails = await
+
     console.log("Lesson Titles: ", lessonTitles);
+
+    let course: Course = {
+      name: courseTitle,
+      thumbnailUrl: "",
+      lessons: [],
+    };
 
     let titleSet: Set<string> = new Set(lessonTitles);
 
-    for (
-      let lessonTitleIdx = 0;
-      lessonTitleIdx < lessonTitles.length;
-      lessonTitleIdx++
-    ) {
-      const lessonTitle = lessonTitles[lessonTitleIdx];
+    for (const lessonTitle of lessonTitles) {
       console.log("clicking section: ", lessonTitle);
       await page.locator(`::-p-xpath(//div[@title='${lessonTitle}'])`).click();
       await page.waitForNavigation().then(() => delay(1000));
 
-      createFolder(
-        `./courses/${groupName}/${courseTitleIdx} - ${courseTitle}/${lessonTitleIdx} - ${lessonTitle}`
-      );
+      // createFolder(
+      //   `./courses/${groupName}/${courseTitleIdx} - ${courseTitle}/${lessonTitleIdx} - ${lessonTitle}`
+      // );
 
       // Get video url
       await page
@@ -120,10 +136,6 @@ async function main() {
       });
 
       console.log("Gathering video url: ", videoUrl);
-
-      createFolder(
-        `./courses/${groupName}/${courseTitleIdx} - ${courseTitle}/`
-      );
 
       const resources = await page.$$(
         "::-p-xpath(//span[contains(@class, 'ResourceLabel')])"
