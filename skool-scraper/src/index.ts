@@ -19,7 +19,7 @@ type Course = {
 
 type Lesson = {
   name: string;
-  description: string;
+  descriptionHtml: string;
   videoUrl: string;
   resources: Resource[];
 };
@@ -69,7 +69,7 @@ async function main() {
   await delay(5000);
 
   // Get community name
-  let group: Community = {
+  let community: Community = {
     name: "WellOiledOperations",
     courses: [],
   };
@@ -87,8 +87,6 @@ async function main() {
   for (const courseTitle of courseTitles) {
     await page.locator(`text/${courseTitle}`).click();
     await page.waitForNavigation();
-
-    // createFolder(`./courses/${groupName}/${courseTitleIdx} - ${courseTitle}`);
 
     // const expandableSections = await page.$$(
     //   `::-p-xpath(//div[contains(@class, 'Icon')])`
@@ -108,17 +106,12 @@ async function main() {
       thumbnailUrl: "",
       lessons: [],
     };
-
-    let titleSet: Set<string> = new Set(lessonTitles);
+    community.courses.push(course);
 
     for (const lessonTitle of lessonTitles) {
       console.log("clicking section: ", lessonTitle);
       await page.locator(`::-p-xpath(//div[@title='${lessonTitle}'])`).click();
       await page.waitForNavigation().then(() => delay(1000));
-
-      // createFolder(
-      //   `./courses/${groupName}/${courseTitleIdx} - ${courseTitle}/${lessonTitleIdx} - ${lessonTitle}`
-      // );
 
       // Get video url
       await page
@@ -135,7 +128,27 @@ async function main() {
         return v.getAttribute("src");
       });
 
-      console.log("Gathering video url: ", videoUrl);
+      console.log("Gathered video url: ", videoUrl);
+
+      const descriptionHtml = await page
+        .$eval(
+          `::-p-xpath(//div[contains(@class, 'skool-editor')])`,
+          (p) => p.innerHTML
+        )
+        .catch(
+          (err) => ""
+          /* Content doesn't have to exist on every page. */
+        );
+
+      console.log("text: ", descriptionHtml);
+
+      let lesson: Lesson = {
+        name: lessonTitle,
+        descriptionHtml,
+        videoUrl,
+        resources: [],
+      };
+      course.lessons.push(lesson);
 
       const resources = await page.$$(
         "::-p-xpath(//span[contains(@class, 'ResourceLabel')])"
@@ -168,10 +181,15 @@ async function main() {
         const closeButton =
           buttons[buttons.length - (1 < resources.length ? 2 : 1)];
 
+        lesson.resources.push({
+          name: resourceName,
+          url: resourceUrl,
+        } as Resource);
+
         await closeButton.click().then(() => delay(2000));
       }
 
-      // await page.goBack();
+      console.log(community);
     }
 
     await page.goto(currentUrl);
